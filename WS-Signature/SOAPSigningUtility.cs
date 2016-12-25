@@ -487,20 +487,18 @@
 			return signingCert;
 		}
 
-	}
 
-
-	/// <summary>
-	/// Utility method adding the required (as per the WS-Policy fragment in the IDMSEnrolmentFacade WSDL) WS-Addressing headers 
-	/// (To, Action, ReplyTo and FaultTo) to the SOAP Header of a createApplication or getApplicationState unsecured SOAP request.
-	/// </summary>
-	/// <param name="payload">The unsecured createApplicationIn or getApplicationState unsecured SOAP request.</param>
-	/// <param name="toString">The  value of the To Ws-Addressing header.</param>
-	/// <param name="actionString">The  value of the Action Ws-Addressing header.</param>
-	/// <param name="replyToAddressString">The  value of the ReplyTo/Address Ws-Addressing header.</param>
-	/// <param name="faultToAddressString">The  value of the FaultTo/Address Ws-Addressing header.</param>
-	/// <returns>The createApplication or getApplicationState SOAP request containing required WS-Addressing headers in the SOAP Header.</returns>
-	[ComVisible(true)]
+		/// <summary>
+		/// Utility method adding the required (as per the WS-Policy fragment in the IDMSEnrolmentFacade WSDL) WS-Addressing headers 
+		/// (To, Action, ReplyTo and FaultTo) to the SOAP Header of a createApplication or getApplicationState unsecured SOAP request.
+		/// </summary>
+		/// <param name="payload">The unsecured createApplicationIn or getApplicationState unsecured SOAP request.</param>
+		/// <param name="toString">The  value of the To Ws-Addressing header.</param>
+		/// <param name="actionString">The  value of the Action Ws-Addressing header.</param>
+		/// <param name="replyToAddressString">The  value of the ReplyTo/Address Ws-Addressing header.</param>
+		/// <param name="faultToAddressString">The  value of the FaultTo/Address Ws-Addressing header.</param>
+		/// <returns>The createApplication or getApplicationState SOAP request containing required WS-Addressing headers in the SOAP Header.</returns>
+		[ComVisible(true)]
 		public String AddAdressingHeaders(String payload, String toString, String actionString, String replyToAddressString, String faultToAddressString) {
 
 			XmlDocument xmlDoc = new XmlDocument();
