@@ -14,7 +14,7 @@
 	/// <summary>
 	/// Utility Class to sign/verify and encrypt/decrypt the messages exchanged with the IDMS server.
 	/// 
-	/// As a reminder, when using certificates based, asymmetric cryptography :
+	/// As a reminder, when using certificates based, asymmetric, cryptography :
 	/// 
 	///		- For XML Signatures (XML-Dsig standard) :
 	///			- Signatures are created with the private key of the signing entity (here the Web Portal private key)
@@ -407,7 +407,7 @@
 
 
 		/// <summary>
-		/// Utility method returning the X509Certificate2 object in the LocalMachine Windows Certificate Store matching the provided certName.
+		/// Utility method returning the X509Certificate2 object in the LocalMachine Windows Certificate Store issued by the provided Issuer and having the serialNulber provided.
 		/// </summary>
 		/// <param name="issuer">The DN of the issuing Authority</param>
 		/// <param name="serial">The serial number of the certificate to be retrieved</param>
@@ -418,7 +418,54 @@
 			X509Store my = new X509Store(StoreName.My, StoreLocation.LocalMachine);
 			my.Open(OpenFlags.ReadOnly);
 			X509Certificate2 signingCert = null;
-			long serialInt = long.Parse(serial);
+			long serialInt = 0;
+			try {
+				serialInt = long.Parse(serial);
+				foreach (X509Certificate2 cert in my.Certificates) {
+					// Windows bug : certificates with DN like 
+					//		CN =SUNCA, OU=JWS, O=SUN, ST=Some-State, C=AU 
+					// are registered as 
+					//		CN =SUNCA, OU=JWS, O=SUN, S=Some-State, C=AU
+					// So we need to rewrite 'S=' or 'ST=' to 'STATE=' to compare issuers... Need to do cert DN C14N here!!
+					String realIssuer = cert.Issuer.Replace("S=", "ST=").Replace("ST=", "STATE=");
+					issuer = issuer.Replace("S=", "ST=").Replace("ST=", "STATE=");
+					long certSerialInt = 0;
+					try {
+						certSerialInt = long.Parse(cert.SerialNumber);
+					} catch (Exception e) {
+						CryptographicException ce = new CryptographicException("Badly formatted cert in store. SerialNumber is not an INTEGER as per the rfc2459, found : " + cert.SerialNumber + "\n" + e.Message + "\n" + e.StackTrace);
+						throw ce;
+					}
+					if (serialInt.Equals(certSerialInt)) {
+						if (issuer.Equals(realIssuer)) {
+							signingCert = cert;
+							break;
+						}
+					}
+				}
+				if (signingCert == null) {
+					throw new CryptographicException("Unable to find certificate in the CurrentUser store");
+				}
+			} catch (Exception e) {
+				Console.WriteLine("SerialNumber is not an INTEGER as per the rfc2459, found : " + serial + ". Comparing serial numbers as Strings");
+				signingCert = GetCertificateByIssuerSerialString(issuer, serial);
+			}
+			return signingCert;
+
+		}
+
+		/// <summary>
+		/// Utility method returning the X509Certificate2 object in the LocalMachine Windows Certificate Store issued by the provided Issuer and having the serialNulber provided.
+		/// This method compares the serialNumber as Strings as all certificates might not respect rfc2459 and use non INTEGERs as serialNumber.
+		/// </summary>
+		/// <param name="issuer">The DN of the issuing Authority</param>
+		/// <param name="serial">The serial number of the certificate to be retrieved</param>
+		/// <returns>The X509Certificate2 object in the LocalMachine Windows Certificate Store issued by the provided Authority and having the provided SerialNumber</returns>
+		public static X509Certificate2 GetCertificateByIssuerSerialString(String issuer, String serial) {
+			X509Store my = new X509Store(StoreName.My, StoreLocation.LocalMachine);
+			//X509Store my = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+			my.Open(OpenFlags.ReadOnly);
+			X509Certificate2 signingCert = null;
 			foreach (X509Certificate2 cert in my.Certificates) {
 				// Windows bug : certificates with DN like 
 				//		CN =SUNCA, OU=JWS, O=SUN, ST=Some-State, C=AU 
@@ -427,14 +474,7 @@
 				// So we need to rewrite 'S=' or 'ST=' to 'STATE=' to compare issuers... Need to do cert DN C14N here!!
 				String realIssuer = cert.Issuer.Replace("S=", "ST=").Replace("ST=", "STATE=");
 				issuer = issuer.Replace("S=", "ST=").Replace("ST=", "STATE=");
-				long certSerialInt = 0;
-				try {
-					certSerialInt = long.Parse(cert.SerialNumber);
-				} catch (Exception e) {
-					CryptographicException ce = new CryptographicException("Badly formatted cert in store. SerialNumber is not an INTEGER as per the rfc2459, found : " + cert.SerialNumber +  "\n" + e.Message + "\n" + e.StackTrace);
-					throw ce;
-				}
-				if (serialInt.Equals(certSerialInt)) {
+				if (serial.Equals(cert.SerialNumber)) {
 					if (issuer.Equals(realIssuer)) {
 						signingCert = cert;
 						break;
@@ -445,21 +485,22 @@
 				throw new CryptographicException("Unable to find certificate in the CurrentUser store");
 			}
 			return signingCert;
-
 		}
 
+	}
 
-		/// <summary>
-		/// Utility method adding the required (as per the WS-Policy fragment in the IDMSEnrolmentFacade WSDL) WS-Addressing headers 
-		/// (To, Action, ReplyTo and FaultTo) to the SOAP Header of a createApplication or getApplicationState unsecured SOAP request.
-		/// </summary>
-		/// <param name="payload">The unsecured createApplicationIn or getApplicationState unsecured SOAP request.</param>
-		/// <param name="toString">The  value of the To Ws-Addressing header.</param>
-		/// <param name="actionString">The  value of the Action Ws-Addressing header.</param>
-		/// <param name="replyToAddressString">The  value of the ReplyTo/Address Ws-Addressing header.</param>
-		/// <param name="faultToAddressString">The  value of the FaultTo/Address Ws-Addressing header.</param>
-		/// <returns>The createApplication or getApplicationState SOAP request containing required WS-Addressing headers in the SOAP Header.</returns>
-		[ComVisible(true)]
+
+	/// <summary>
+	/// Utility method adding the required (as per the WS-Policy fragment in the IDMSEnrolmentFacade WSDL) WS-Addressing headers 
+	/// (To, Action, ReplyTo and FaultTo) to the SOAP Header of a createApplication or getApplicationState unsecured SOAP request.
+	/// </summary>
+	/// <param name="payload">The unsecured createApplicationIn or getApplicationState unsecured SOAP request.</param>
+	/// <param name="toString">The  value of the To Ws-Addressing header.</param>
+	/// <param name="actionString">The  value of the Action Ws-Addressing header.</param>
+	/// <param name="replyToAddressString">The  value of the ReplyTo/Address Ws-Addressing header.</param>
+	/// <param name="faultToAddressString">The  value of the FaultTo/Address Ws-Addressing header.</param>
+	/// <returns>The createApplication or getApplicationState SOAP request containing required WS-Addressing headers in the SOAP Header.</returns>
+	[ComVisible(true)]
 		public String AddAdressingHeaders(String payload, String toString, String actionString, String replyToAddressString, String faultToAddressString) {
 
 			XmlDocument xmlDoc = new XmlDocument();
